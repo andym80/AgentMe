@@ -45,6 +45,42 @@ export default function PressManager() {
     setUseSimulatedContent(hasQuotaExceeded)
   }, [])
 
+  // Función para verificar la similitud entre noticias
+  function calculateNewsSimilarity(news1: NewsItem, news2: NewsItem): number {
+    // Calcular similitud basada en título y resumen
+    const text1 = `${news1.title} ${news1.summary || ""}`.toLowerCase()
+    const text2 = `${news2.title} ${news2.summary || ""}`.toLowerCase()
+
+    // Dividir en palabras
+    const words1 = text1.split(/\s+/)
+    const words2 = text2.split(/\s+/)
+
+    // Contar palabras comunes
+    const commonWords = words1.filter((word) => words2.includes(word))
+
+    // Calcular similitud como proporción de palabras comunes
+    return commonWords.length / Math.max(words1.length, words2.length)
+  }
+
+  // Función para filtrar noticias similares
+  function filterSimilarNews(newsList: NewsItem[], similarityThreshold = 0.4): NewsItem[] {
+    const filteredNews: NewsItem[] = []
+
+    for (const news of newsList) {
+      // Verificar si esta noticia es similar a alguna ya incluida
+      const isSimilarToExisting = filteredNews.some(
+        (existingNews) => calculateNewsSimilarity(news, existingNews) > similarityThreshold,
+      )
+
+      // Solo incluir si no es similar a las existentes
+      if (!isSimilarToExisting) {
+        filteredNews.push(news)
+      }
+    }
+
+    return filteredNews
+  }
+
   // Función para obtener noticias
   const handleScrapeNews = async () => {
     setIsLoading(true)
@@ -76,10 +112,12 @@ export default function PressManager() {
       }
 
       if (allNews.length > 0) {
-        setNewsItems(allNews)
+        // Usar esta función antes de procesar las noticias
+        const uniqueNewsItems = filterSimilarNews(allNews)
+        setNewsItems(uniqueNewsItems)
 
         // Filter news related to laws
-        const lawsRelatedNews = allNews.filter(
+        const lawsRelatedNews = uniqueNewsItems.filter(
           (item) =>
             item.title.toLowerCase().includes("ley") ||
             item.title.toLowerCase().includes("legisla") ||

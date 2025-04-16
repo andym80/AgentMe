@@ -44,3 +44,12 @@ export function decrypt(encryptedText: string, secretKey: string): string {
 
   return decrypted
 }
+
+export async function encryptData(data: string): Promise<string> {
+  // Usar una clave secreta predefinida o almacenada de forma segura
+  const secretKey = process.env.ENCRYPTION_KEY || "default-secret-key" // Clave por defecto solo para desarrollo
+
+  // Encriptar los datos
+  const encryptedData = encrypt(data, secretKey)
+  return encryptedData
+}

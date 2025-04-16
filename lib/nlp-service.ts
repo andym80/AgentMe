@@ -1,451 +1,452 @@
 "use server"
 
-import type { NewsItem, PoliticalParty } from "./types"
-import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
-import { getApiKey } from "./api-key-action"
-
-// Interfaz para el análisis de sentimiento
-interface SentimentAnalysis {
-  positive: number
-  neutral: number
-  negative: number
-  dominant: "positive" | "neutral" | "negative"
-}
-
-// Interfaz para entidades nombradas
-interface NamedEntity {
-  text: string
-  type: "PERSON" | "ORGANIZATION" | "LOCATION" | "DATE" | "EVENT" | "LAW" | "OTHER"
-  relevance: number
-}
-
-// Interfaz para temas clave
-interface KeyTopic {
-  topic: string
-  relevance: number
-  sentiment: SentimentAnalysis
-}
-
-// Interfaz para el análisis completo de NLP
-export interface NLPAnalysis {
-  sentiment: SentimentAnalysis
-  entities: NamedEntity[]
-  keyTopics: KeyTopic[]
-  summary: string
+// Interfaz para el resultado del análisis
+interface SentimentAnalysisResult {
+  sentiment: {
+    positive: number
+    negative: number
+    neutral: number
+    dominant: string
+  }
+  readabilityScore: number
+  complexity: number
+  formalityLevel: number
   keywords: string[]
-  readabilityScore: number // 0-100, donde 100 es muy legible
-  complexity: number // 0-100, donde 100 es muy complejo
-  formalityLevel: number // 0-100, donde 100 es muy formal
-  politicalBias?: number // -100 a 100, donde -100 es extrema izquierda y 100 extrema derecha
+  keyTopics: {
+    topic: string
+    sentiment: {
+      positive: number
+      negative: number
+      neutral: number
+      dominant: string
+    }
+  }[]
+  dominantTone: string
+  targetAudience: string
 }
 
-// Modificar la función analyzeText para manejar mejor las respuestas y errores
-// Reemplazar la función completa con esta versión mejorada:
-
-// Función para analizar texto con NLP
-export async function analyzeText(text: string, apiKey?: string): Promise<NLPAnalysis | null> {
+// Función para analizar texto usando OpenAI
+export async function analyzeText(text: string, apiKey?: string | null): Promise<SentimentAnalysisResult> {
   try {
-    // Intentar obtener la clave API del servidor si no se proporciona
-    if (!apiKey) {
-      apiKey = await getApiKey()
-    }
-
-    // Si no hay clave API válida, devolver null
+    // Si no hay API key, usar análisis local
     if (!apiKey || !apiKey.startsWith("sk-")) {
-      console.log("Clave API no válida para análisis NLP")
-      return simulateNLPAnalysis(text)
+      return generateLocalAnalysis(text)
     }
 
-    const prompt = `
-Analiza el siguiente texto utilizando técnicas de NLP y devuelve un análisis estructurado en formato JSON:
+    // Intentar hasta 3 veces
+    let attempts = 0
+    const maxAttempts = 3
+    let lastError: any = null
 
-"""
-${text}
-"""
-
-El análisis debe incluir:
-1. Análisis de sentimiento (positivo, neutral, negativo)
-2. Entidades nombradas (personas, organizaciones, lugares, fechas, eventos)
-3. Temas clave
-4. Resumen breve (máximo 2 oraciones)
-5. Palabras clave (máximo 5)
-6. Puntuación de legibilidad (0-100)
-7. Nivel de complejidad (0-100)
-8. Nivel de formalidad (0-100)
-9. Sesgo político si es detectable (-100 a 100, donde -100 es extrema izquierda y 100 extrema derecha)
-
-Responde SOLO con el objeto JSON, sin texto adicional.
-`
-
-    try {
-      const { text: analysisText } = await generateText({
-        model: openai("gpt-4o"),
-        prompt,
-        temperature: 0.2,
-        maxTokens: 1000,
-        apiKey,
-      })
-
-      // Verificar que la respuesta no esté vacía
-      if (!analysisText || analysisText.trim() === "") {
-        console.log("Respuesta vacía en análisis NLP, usando simulación")
-        return simulateNLPAnalysis(text)
-      }
-
+    while (attempts < maxAttempts) {
       try {
-        // Intentar limpiar la respuesta si contiene texto adicional antes o después del JSON
-        let jsonText = analysisText.trim()
+        attempts++
 
-        // Buscar el primer '{' y el último '}'
-        const startIndex = jsonText.indexOf("{")
-        const endIndex = jsonText.lastIndexOf("}")
+        // Llamar a la API de OpenAI
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-3.5-turbo",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Eres un experto en análisis lingüístico y de sentimiento. Analiza el siguiente texto político y proporciona un análisis detallado en formato JSON.",
+              },
+              {
+                role: "user",
+                content: `Analiza el siguiente discurso político y proporciona un análisis detallado que incluya: 
+                1. Sentimiento general (porcentajes de positivo, negativo y neutral, y cuál es dominante)
+                2. Puntuación de legibilidad (0-100)
+                3. Nivel de complejidad (0-100)
+                4. Nivel de formalidad (0-100)
+                5. Palabras clave principales (5-10)
+                6. Temas clave (2-3) con su sentimiento asociado
+                7. Tono dominante
+                8. Audiencia objetivo probable
+                
+                Proporciona el resultado en formato JSON válido, sin explicaciones adicionales.
+                
+                Texto a analizar:
+                ${text.substring(0, 2000)}...`,
+              },
+            ],
+            temperature: 0.5,
+            max_tokens: 1000,
+          }),
+        })
 
-        if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-          jsonText = jsonText.substring(startIndex, endIndex + 1)
+        // Verificar si la respuesta es exitosa
+        if (!response.ok) {
+          const errorData = await response.json()
+
+          // Verificar si es un error de cuota excedida
+          if (
+            response.status === 429 ||
+            (errorData.error &&
+              errorData.error.message &&
+              (errorData.error.message.toLowerCase().includes("quota") ||
+                errorData.error.message.toLowerCase().includes("rate limit") ||
+                errorData.error.message.toLowerCase().includes("exceeded") ||
+                errorData.error.message.toLowerCase().includes("billing")))
+          ) {
+            // Marcar en localStorage que se ha excedido la cuota
+            if (typeof window !== "undefined") {
+              localStorage.setItem("openai_quota_exceeded", "true")
+            }
+
+            throw new Error("QUOTA_EXCEEDED: " + errorData.error?.message)
+          }
+
+          // Otros errores de API
+          if (errorData.error && errorData.error.message && errorData.error.message.toLowerCase().includes("api key")) {
+            if (typeof window !== "undefined") {
+              localStorage.setItem("openai_api_error", "invalid_key")
+            }
+            throw new Error("API_KEY_INVALID: " + errorData.error?.message)
+          }
+
+          throw new Error(`Error en la API de OpenAI: ${errorData.error?.message || response.statusText}`)
         }
 
-        const analysis = JSON.parse(jsonText)
-        return analysis as NLPAnalysis
-      } catch (parseError) {
-        console.error("Error al parsear la respuesta JSON:", parseError)
-        return simulateNLPAnalysis(text)
+        // Procesar la respuesta
+        const data = await response.json()
+        const resultText = data.choices[0].message.content
+
+        try {
+          // Intentar extraer el JSON de la respuesta
+          const jsonMatch = resultText.match(/\{[\s\S]*\}/)
+          const jsonStr = jsonMatch ? jsonMatch[0] : resultText
+          const result = JSON.parse(jsonStr)
+
+          // Asegurarse de que el resultado tenga la estructura esperada
+          return {
+            sentiment: result.sentiment || { positive: 33, negative: 33, neutral: 34, dominant: "neutral" },
+            readabilityScore: result.readabilityScore || 70,
+            complexity: result.complexity || 65,
+            formalityLevel: result.formalityLevel || 70,
+            keywords: result.keywords || ["política", "economía", "sociedad", "desarrollo", "propuestas"],
+            keyTopics: result.keyTopics || [
+              {
+                topic: "Análisis político",
+                sentiment: { positive: 50, negative: 25, neutral: 25, dominant: "positive" },
+              },
+              {
+                topic: "Propuestas económicas",
+                sentiment: { positive: 40, negative: 30, neutral: 30, dominant: "positive" },
+              },
+            ],
+            dominantTone: result.dominantTone || "informativo",
+            targetAudience: result.targetAudience || "público general interesado en política",
+          }
+        } catch (parseError) {
+          console.error("Error al analizar la respuesta JSON:", parseError)
+          // Si hay un error al analizar el JSON, intentar extraer la información manualmente
+          return generateLocalAnalysis(text)
+        }
+      } catch (error) {
+        lastError = error
+        // Si es un error de cuota o API key, no reintentar
+        if (
+          error instanceof Error &&
+          (error.message.includes("QUOTA_EXCEEDED") || error.message.includes("API_KEY_INVALID"))
+        ) {
+          break
+        }
+        // Esperar antes de reintentar
+        await new Promise((resolve) => setTimeout(resolve, 1000))
       }
-    } catch (apiError) {
-      console.error("Error en la API durante análisis NLP:", apiError)
-      return simulateNLPAnalysis(text)
     }
+
+    // Si llegamos aquí, todos los intentos fallaron
+    console.error(`Error en la API al analizar texto: Failed after ${attempts} attempts. Last error:`, lastError)
+
+    // Usar análisis local como fallback
+    return generateLocalAnalysis(text)
   } catch (error) {
-    console.error("Error en el análisis NLP:", error)
-    return simulateNLPAnalysis(text)
+    console.error("Error general al analizar texto:", error)
+    // En caso de cualquier error, devolver un análisis predeterminado
+    return generateLocalAnalysis(text)
   }
 }
 
-// Función para simular análisis NLP cuando no hay API disponible
-function simulateNLPAnalysis(text: string): NLPAnalysis {
-  // Análisis de sentimiento básico basado en palabras clave
-  const positiveWords = ["bueno", "excelente", "positivo", "favorable", "beneficio", "éxito", "mejora", "crecimiento"]
-  const negativeWords = ["malo", "negativo", "problema", "crisis", "fracaso", "deterioro", "caída", "preocupante"]
+// Función para generar un análisis local sin usar la API
+function generateLocalAnalysis(text: string): SentimentAnalysisResult {
+  // Análisis básico del texto
+  const lowerText = text.toLowerCase()
 
-  const textLower = text.toLowerCase()
+  // Detectar palabras positivas y negativas para un análisis simple
+  const positiveWords = [
+    "bueno",
+    "excelente",
+    "oportunidad",
+    "progreso",
+    "desarrollo",
+    "crecimiento",
+    "libertad",
+    "justicia",
+    "derechos",
+    "bienestar",
+    "solución",
+    "propuesta",
+    "mejora",
+    "avance",
+    "éxito",
+  ]
+  const negativeWords = [
+    "problema",
+    "crisis",
+    "inflación",
+    "pobreza",
+    "corrupción",
+    "desigualdad",
+    "ajuste",
+    "desempleo",
+    "preocupación",
+    "dificultad",
+    "fracaso",
+    "error",
+    "amenaza",
+    "peligro",
+  ]
 
+  // Contar ocurrencias
   let positiveCount = 0
   let negativeCount = 0
 
   positiveWords.forEach((word) => {
-    const regex = new RegExp(`\\b${word}\\b`, "g")
-    const matches = textLower.match(regex)
+    const regex = new RegExp(`\\b${word}\\b`, "gi")
+    const matches = lowerText.match(regex)
     if (matches) positiveCount += matches.length
   })
 
   negativeWords.forEach((word) => {
-    const regex = new RegExp(`\\b${word}\\b`, "g")
-    const matches = textLower.match(regex)
+    const regex = new RegExp(`\\b${word}\\b`, "gi")
+    const matches = lowerText.match(regex)
     if (matches) negativeCount += matches.length
   })
 
+  // Calcular porcentajes
   const total = positiveCount + negativeCount
-  const positive = total > 0 ? (positiveCount / total) * 100 : 33.33
-  const negative = total > 0 ? (negativeCount / total) * 100 : 33.33
+  let positive = total > 0 ? Math.round((positiveCount / total) * 100) : 33
+  let negative = total > 0 ? Math.round((negativeCount / total) * 100) : 33
+
+  // Asegurarse de que no sumen más de 100
+  if (positive + negative > 100) {
+    const factor = 100 / (positive + negative)
+    positive = Math.round(positive * factor)
+    negative = Math.round(negative * factor)
+  }
+
   const neutral = 100 - positive - negative
 
-  let dominant: "positive" | "neutral" | "negative" = "neutral"
+  // Determinar sentimiento dominante
+  let dominant = "neutral"
   if (positive > negative && positive > neutral) dominant = "positive"
-  if (negative > positive && negative > neutral) dominant = "negative"
+  else if (negative > positive && negative > neutral) dominant = "negative"
 
-  // Extracción básica de entidades
-  const entities: NamedEntity[] = []
+  // Extraer palabras clave (simplemente las palabras más frecuentes que no sean stopwords)
+  const stopwords = [
+    "el",
+    "la",
+    "los",
+    "las",
+    "un",
+    "una",
+    "unos",
+    "unas",
+    "y",
+    "o",
+    "pero",
+    "porque",
+    "como",
+    "que",
+    "en",
+    "por",
+    "para",
+    "con",
+    "sin",
+    "a",
+    "ante",
+    "bajo",
+    "cabe",
+    "de",
+    "desde",
+    "durante",
+    "entre",
+    "hacia",
+    "hasta",
+    "mediante",
+    "para",
+    "por",
+    "según",
+    "sin",
+    "so",
+    "sobre",
+    "tras",
+    "versus",
+    "vía",
+  ]
 
-  // Buscar personas (nombres propios)
-  const nameRegex = /\b[A-Z][a-z]+ [A-Z][a-z]+\b/g
-  const names = text.match(nameRegex) || []
-  names.forEach((name) => {
-    entities.push({
-      text: name,
-      type: "PERSON",
-      relevance: 0.8,
-    })
+  const words = lowerText.split(/\W+/).filter((word) => word.length > 3 && !stopwords.includes(word))
+
+  const wordCount: Record<string, number> = {}
+  words.forEach((word) => {
+    wordCount[word] = (wordCount[word] || 0) + 1
   })
 
-  // Buscar organizaciones (palabras en mayúsculas)
-  const orgRegex = /\b[A-Z]{2,}\b/g
-  const orgs = text.match(orgRegex) || []
-  orgs.forEach((org) => {
-    entities.push({
-      text: org,
-      type: "ORGANIZATION",
-      relevance: 0.7,
-    })
+  const keywords = Object.entries(wordCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map((entry) => entry[0])
+
+  // Determinar temas clave (simplificado)
+  const politicalTerms = ["gobierno", "estado", "política", "democracia", "elecciones", "partido"]
+  const economicTerms = ["economía", "inflación", "impuestos", "presupuesto", "fiscal", "monetario", "dólar", "pesos"]
+  const socialTerms = ["sociedad", "derechos", "educación", "salud", "trabajo", "vivienda", "seguridad"]
+
+  let politicalScore = 0
+  let economicScore = 0
+  let socialScore = 0
+
+  politicalTerms.forEach((term) => {
+    const regex = new RegExp(`\\b${term}\\b`, "gi")
+    const matches = lowerText.match(regex)
+    if (matches) politicalScore += matches.length
   })
 
-  // Extracción básica de temas clave
-  const sentences = text.split(/[.!?]+/)
-  const keyTopics: KeyTopic[] = []
+  economicTerms.forEach((term) => {
+    const regex = new RegExp(`\\b${term}\\b`, "gi")
+    const matches = lowerText.match(regex)
+    if (matches) economicScore += matches.length
+  })
 
-  if (sentences.length > 0) {
-    // Usar la primera oración como tema principal
+  socialTerms.forEach((term) => {
+    const regex = new RegExp(`\\b${term}\\b`, "gi")
+    const matches = lowerText.match(regex)
+    if (matches) socialScore += matches.length
+  })
+
+  const keyTopics = []
+
+  if (politicalScore > 0) {
     keyTopics.push({
-      topic: sentences[0].trim().substring(0, 50) + (sentences[0].length > 50 ? "..." : ""),
-      relevance: 0.9,
+      topic: "Análisis político",
       sentiment: {
-        positive: positive,
-        neutral: neutral,
-        negative: negative,
+        positive: Math.min(positive + 10, 100),
+        negative: Math.max(negative - 5, 0),
+        neutral: Math.max(100 - Math.min(positive + 10, 100) - Math.max(negative - 5, 0), 0),
         dominant: dominant,
       },
     })
-
-    // Usar otra oración si hay suficientes
-    if (sentences.length > 2) {
-      keyTopics.push({
-        topic: sentences[2].trim().substring(0, 50) + (sentences[2].length > 50 ? "..." : ""),
-        relevance: 0.7,
-        sentiment: {
-          positive: positive,
-          neutral: neutral,
-          negative: negative,
-          dominant: dominant,
-        },
-      })
-    }
   }
 
-  // Generar resumen básico
-  const summary =
-    sentences.length > 0
-      ? sentences[0].trim() + (sentences.length > 1 ? " " + sentences[1].trim() : "")
-      : text.substring(0, 100) + (text.length > 100 ? "..." : "")
+  if (economicScore > 0) {
+    keyTopics.push({
+      topic: "Propuestas económicas",
+      sentiment: {
+        positive: Math.min(positive - 5, 100),
+        negative: Math.max(negative + 5, 0),
+        neutral: Math.max(100 - Math.min(positive - 5, 100) - Math.max(negative + 5, 0), 0),
+        dominant: dominant,
+      },
+    })
+  }
 
-  // Extraer palabras clave (palabras más largas)
-  const words = text.split(/\s+/)
-  const sortedWords = words
-    .filter((word) => word.length > 5)
-    .sort((a, b) => b.length - a.length)
-    .slice(0, 5)
-    .map((word) => word.replace(/[.,;:!?()]/g, ""))
+  if (socialScore > 0) {
+    keyTopics.push({
+      topic: "Políticas sociales",
+      sentiment: {
+        positive: positive,
+        negative: negative,
+        neutral: neutral,
+        dominant: dominant,
+      },
+    })
+  }
+
+  // Si no tenemos suficientes temas, añadir uno genérico
+  if (keyTopics.length < 2) {
+    keyTopics.push({
+      topic: "Visión general",
+      sentiment: {
+        positive: positive,
+        negative: negative,
+        neutral: neutral,
+        dominant: dominant,
+      },
+    })
+  }
+
+  // Determinar complejidad basada en longitud de palabras y oraciones
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0)
+  const avgWordLength = words.reduce((sum, word) => sum + word.length, 0) / words.length
+  const avgSentenceLength = words.length / sentences.length
+
+  const complexity = Math.min(Math.round((avgWordLength * 10 + avgSentenceLength) * 2), 100)
+
+  // Determinar formalidad basada en presencia de ciertos términos
+  const formalTerms = [
+    "por lo tanto",
+    "en consecuencia",
+    "sin embargo",
+    "no obstante",
+    "en virtud de",
+    "en relación a",
+    "cabe destacar",
+  ]
+  const informalTerms = ["bueno", "che", "digamos", "o sea", "tipo", "como que", "ponele"]
+
+  let formalCount = 0
+  let informalCount = 0
+
+  formalTerms.forEach((term) => {
+    const regex = new RegExp(term, "gi")
+    const matches = text.match(regex)
+    if (matches) formalCount += matches.length
+  })
+
+  informalTerms.forEach((term) => {
+    const regex = new RegExp(term, "gi")
+    const matches = text.match(regex)
+    if (matches) informalCount += matches.length
+  })
+
+  // Calcular nivel de formalidad
+  const formalityLevel = Math.min(Math.round(70 + formalCount * 5 - informalCount * 10), 100)
+
+  // Determinar tono dominante
+  let dominantTone = "informativo"
+  if (negative > 40) dominantTone = "crítico"
+  if (positive > 60) dominantTone = "optimista"
+  if (lowerText.includes("propongo") || lowerText.includes("proponemos")) dominantTone = "propositivo"
+
+  // Determinar audiencia objetivo
+  let targetAudience = "público general interesado en política"
+  if (complexity > 70) targetAudience = "público con conocimientos avanzados de política"
+  if (lowerText.includes("compañeros") || lowerText.includes("militantes")) targetAudience = "simpatizantes del partido"
+  if (lowerText.includes("compatriotas") || lowerText.includes("argentinos")) targetAudience = "ciudadanía en general"
+
+  // Calcular legibilidad (simplificado)
+  const readabilityScore = Math.max(100 - complexity, 30)
 
   return {
     sentiment: {
-      positive: positive,
-      neutral: neutral,
-      negative: negative,
-      dominant: dominant,
+      positive,
+      negative,
+      neutral,
+      dominant,
     },
-    entities: entities,
-    keyTopics: keyTopics,
-    summary: summary,
-    keywords: sortedWords,
-    readabilityScore: 70, // Valor predeterminado
-    complexity: text.length > 500 ? 70 : 40, // Basado en longitud
-    formalityLevel: 60, // Valor predeterminado
-    politicalBias: 0, // Neutral por defecto
-  }
-}
-
-// Modificar la función generateNewsContext para manejar mejor las respuestas y errores
-// Reemplazar la función completa con esta versión mejorada:
-
-// Función para generar un contexto enriquecido para una noticia
-export async function generateNewsContext(newsItem: NewsItem, apiKey?: string): Promise<string> {
-  try {
-    // Intentar obtener la clave API del servidor si no se proporciona
-    if (!apiKey) {
-      apiKey = await getApiKey()
-    }
-
-    // Si no hay clave API válida, devolver un contexto básico
-    if (!apiKey || !apiKey.startsWith("sk-")) {
-      console.log("Clave API de OpenAI no válida para generar contexto")
-      return generateBasicContext(newsItem)
-    }
-
-    const prompt = `
-Genera un breve contexto (máximo 2-3 oraciones) para la siguiente noticia, explicando su relevancia y posible impacto:
-
-Título: ${newsItem.title}
-Categoría: ${newsItem.category}
-Subcategoría: ${newsItem.subcategory || "No especificada"}
-Tipo de noticia: ${newsItem.newsType || "Estándar"}
-Resumen: ${newsItem.summary}
-
-El contexto debe:
-1. Ser conciso y objetivo
-2. Explicar por qué esta noticia es relevante
-3. Mencionar posibles implicaciones
-4. NO incluir opiniones políticas
-5. Ser informativo para alguien que no está familiarizado con el tema
-
-Responde SOLO con el contexto, sin introducción ni explicaciones adicionales.
-`
-
-    try {
-      const { text: context } = await generateText({
-        model: openai("gpt-4o"),
-        prompt,
-        temperature: 0.3,
-        maxTokens: 200,
-        apiKey,
-      })
-
-      // Verificar que la respuesta no esté vacía
-      if (!context || context.trim() === "") {
-        console.log("Respuesta vacía al generar contexto, usando contexto básico")
-        return generateBasicContext(newsItem)
-      }
-
-      return context
-    } catch (apiError) {
-      console.error("Error en la API al generar contexto:", apiError)
-      return generateBasicContext(newsItem)
-    }
-  } catch (error) {
-    console.error("Error al generar contexto:", error)
-    return generateBasicContext(newsItem)
-  }
-}
-
-// Función para generar un contexto básico sin API
-function generateBasicContext(newsItem: NewsItem): string {
-  const categoryContext: Record<string, string> = {
-    politics:
-      "Esta noticia política podría tener implicaciones para el equilibrio de poder y las futuras políticas públicas.",
-    nacional:
-      "Este evento de alcance nacional podría afectar a ciudadanos en todo el país y tener repercusiones en múltiples sectores.",
-    provincial:
-      "Esta noticia provincial podría impactar en la administración local y en los servicios públicos de la región.",
-    municipal:
-      "Este desarrollo municipal podría afectar directamente a los residentes locales y los servicios comunitarios.",
-    local: "Este evento local podría tener un impacto significativo en la comunidad inmediata y sus instituciones.",
-    business: "Esta noticia empresarial podría afectar al mercado laboral y a la economía del sector.",
-    economy:
-      "Este desarrollo económico podría tener implicaciones para la inflación, el empleo y el poder adquisitivo.",
-    technology: "Esta innovación tecnológica podría cambiar prácticas establecidas y abrir nuevas oportunidades.",
-    health: "Esta noticia sanitaria podría afectar a las políticas de salud pública y al bienestar de la población.",
-    environment:
-      "Este evento ambiental podría tener consecuencias a largo plazo para los ecosistemas y las comunidades.",
-    education: "Esta noticia educativa podría impactar en el futuro de estudiantes y en la calidad de la enseñanza.",
-    security: "Este desarrollo en seguridad podría afectar a las políticas públicas y a la percepción ciudadana.",
-    international:
-      "Esta noticia internacional podría tener repercusiones en las relaciones diplomáticas y comerciales de Argentina.",
-  }
-
-  return (
-    categoryContext[newsItem.category] ||
-    "Esta noticia podría tener implicaciones significativas dependiendo de cómo se desarrollen los acontecimientos."
-  )
-}
-
-// Función auxiliar para obtener el nombre del partido
-function getPartyName(party: PoliticalParty): string {
-  switch (party) {
-    case "libertad-avanza":
-      return "La Libertad Avanza"
-    case "union-patria":
-      return "Unión por la Patria"
-    case "juntos-cambio":
-      return "Juntos por el Cambio"
-    case "frente-izquierda":
-      return "Frente de Izquierda"
-    case "otros":
-      return "Otros partidos"
-    default:
-      return "Desconocido"
-  }
-}
-
-// Modificar la función enhanceResponseCoherence para manejar mejor las respuestas y errores
-// Reemplazar la función completa con esta versión mejorada:
-
-// Función para mejorar la coherencia entre noticias y respuestas
-export async function enhanceResponseCoherence(
-  newsItems: NewsItem[],
-  response: string,
-  party: PoliticalParty,
-  apiKey?: string,
-): Promise<string> {
-  try {
-    // Intentar obtener la clave API del servidor si no se proporciona
-    if (!apiKey) {
-      apiKey = await getApiKey()
-    }
-
-    // Si no hay clave API válida, devolver la respuesta original
-    if (!apiKey || !apiKey.startsWith("sk-")) {
-      console.log("Clave API no válida para mejorar coherencia")
-      return response
-    }
-
-    // Si la respuesta es muy corta, devolverla sin cambios
-    if (response.length < 50) {
-      return response
-    }
-
-    // Extraer información clave de las noticias
-    const newsContext = newsItems.map((item) => ({
-      title: item.title,
-      category: item.category,
-      subcategory: item.subcategory,
-      newsType: item.newsType,
-      summary: item.summary?.substring(0, 200) + (item.summary && item.summary.length > 200 ? "..." : ""),
-      sentiment: item.acceptance
-        ? item.acceptance.positive > item.acceptance.negative
-          ? "positivo"
-          : item.acceptance.negative > item.acceptance.positive
-            ? "negativo"
-            : "neutral"
-        : "desconocido",
-    }))
-
-    const prompt = `
-Eres un experto en comunicación política para el partido "${getPartyName(party)}" en Argentina.
-
-CONTEXTO DE NOTICIAS:
-${JSON.stringify(newsContext, null, 2)}
-
-RESPUESTA ACTUAL:
-"""
-${response}
-"""
-
-INSTRUCCIONES:
-Mejora la respuesta actual para aumentar la coherencia y concordancia con las noticias proporcionadas. 
-La respuesta debe:
-
-1. Mantener el mismo tono y estilo político del partido
-2. Hacer referencias más naturales y fluidas a los temas de las noticias
-3. Asegurar que la terminología sea consistente
-4. Mejorar las transiciones entre ideas
-5. Mantener la misma longitud aproximada
-6. Conservar los puntos clave y argumentos principales
-7. NO cambiar la posición política o ideológica
-8. NO agregar información completamente nueva que no esté relacionada con las noticias
-9. Mantener el mismo nivel de formalidad
-
-Devuelve SOLO la respuesta mejorada, sin explicaciones ni comentarios adicionales.
-`
-
-    try {
-      const { text: enhancedResponse } = await generateText({
-        model: openai("gpt-4o"),
-        prompt,
-        temperature: 0.3,
-        maxTokens: 1500,
-        apiKey,
-      })
-
-      // Verificar que la respuesta no esté vacía
-      if (!enhancedResponse || enhancedResponse.trim() === "") {
-        console.log("Respuesta vacía al mejorar coherencia, devolviendo original")
-        return response
-      }
-
-      return enhancedResponse
-    } catch (apiError) {
-      console.error("Error en la API al mejorar coherencia:", apiError)
-      return response
-    }
-  } catch (error) {
-    console.error("Error al mejorar la coherencia:", error)
-    return response // Devolver la respuesta original en caso de error
+    readabilityScore,
+    complexity,
+    formalityLevel,
+    keywords,
+    keyTopics,
+    dominantTone,
+    targetAudience,
   }
 }

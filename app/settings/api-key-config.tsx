@@ -143,6 +143,31 @@ export default function ApiKeyConfig() {
           </AlertDescription>
         </Alert>
 
+        {localStorage.getItem("openai_quota_exceeded") && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Cuota de API excedida</AlertTitle>
+            <AlertDescription>
+              <p>Se ha detectado que su clave API de OpenAI ha excedido su cuota. Para resolver este problema:</p>
+              <ul className="list-disc pl-5 mt-2">
+                <li>
+                  Verifique su plan de facturación en la{" "}
+                  <a
+                    href="https://platform.openai.com/account/billing/overview"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium underline"
+                  >
+                    página de facturación de OpenAI
+                  </a>
+                </li>
+                <li>Considere actualizar a un plan de pago si está utilizando una cuenta gratuita</li>
+                <li>O utilice una clave API diferente</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="api-key">Clave API de OpenAI</Label>
           <Input

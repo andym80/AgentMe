@@ -230,49 +230,85 @@ export default function QuickResponse({ content, party, newsItem, responseType }
 
     // Extract key sentences that might be important points
     const keyPoints: string[] = []
+    const allSentences: string[] = []
 
+    // Primero, recolectar todas las oraciones
     paragraphs.forEach((p) => {
       const sentences = p.split(/\.\s+/)
       sentences.forEach((s) => {
-        // Look for sentences that might be key points
-        if (
-          s.includes("importante") ||
-          s.includes("clave") ||
-          s.includes("fundamental") ||
-          s.includes("destacar") ||
-          s.includes("esencial") ||
-          s.includes("propone") ||
-          s.includes("solución") ||
-          s.includes("impacto") ||
-          s.includes("consecuencia") ||
-          s.includes("beneficio") ||
-          s.includes("problema") ||
-          s.includes("desafío") ||
-          s.includes("ventaja") ||
-          s.includes("precedente") ||
-          s.includes("histórico") ||
-          s.includes("principio")
-        ) {
-          // Clean up the sentence
-          const cleanSentence = s.trim().replace(/^[,;:]\s*/, "")
-          if (cleanSentence.length > 10 && !keyPoints.includes(cleanSentence)) {
-            keyPoints.push(cleanSentence)
-          }
+        if (s.trim().length > 15) {
+          // Ignorar oraciones muy cortas
+          allSentences.push(s.trim())
         }
       })
     })
 
-    // If we couldn't find enough key points, just take the first sentence of each paragraph
+    // Buscar oraciones con palabras clave de alta relevancia
+    const highPriorityKeywords = [
+      "importante",
+      "clave",
+      "fundamental",
+      "crucial",
+      "esencial",
+      "impacto",
+      "consecuencia",
+      "implica",
+      "significa",
+      "demuestra",
+      "revela",
+      "evidencia",
+      "confirma",
+      "refuta",
+      "contradice",
+      "propone",
+      "plantea",
+      "sugiere",
+      "recomienda",
+      "advierte",
+      "destaca",
+      "subraya",
+      "enfatiza",
+      "prioriza",
+      "concluye",
+    ]
+
+    // Primero añadir oraciones con palabras clave de alta prioridad
+    allSentences.forEach((sentence) => {
+      if (
+        highPriorityKeywords.some((keyword) => sentence.toLowerCase().includes(keyword)) &&
+        !keyPoints.includes(sentence)
+      ) {
+        keyPoints.push(sentence)
+      }
+    })
+
+    // Si no tenemos suficientes puntos clave, buscar oraciones con datos específicos
     if (keyPoints.length < 3) {
-      paragraphs.forEach((p) => {
-        const firstSentence = p.split(/\.\s+/)[0].trim()
-        if (firstSentence.length > 10 && !keyPoints.includes(firstSentence)) {
-          keyPoints.push(firstSentence)
+      const dataPatterns = [
+        /\d+%/, // Porcentajes
+        /\d+ (?:millones|mil)/, // Cantidades grandes
+        /(?:aumentó|disminuyó|creció|redujo)/, // Cambios
+        /según (?:el|la|los|las)/, // Fuentes
+        /(?:primera|primero|último|última) vez/, // Hitos
+      ]
+
+      allSentences.forEach((sentence) => {
+        if (!keyPoints.includes(sentence) && dataPatterns.some((pattern) => pattern.test(sentence.toLowerCase()))) {
+          keyPoints.push(sentence)
         }
       })
     }
 
-    // Limit to 5 key points
+    // Si aún necesitamos más puntos, tomar las oraciones más largas (suelen ser más informativas)
+    if (keyPoints.length < 4) {
+      const remainingSentences = allSentences.filter((s) => !keyPoints.includes(s)).sort((a, b) => b.length - a.length)
+
+      for (let i = 0; i < remainingSentences.length && keyPoints.length < 5; i++) {
+        keyPoints.push(remainingSentences[i])
+      }
+    }
+
+    // Asegurar que no excedemos 5 puntos clave
     return keyPoints.slice(0, 5)
   }
 

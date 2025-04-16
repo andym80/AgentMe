@@ -1118,6 +1118,38 @@ function getMockNewsItems(category: string): NewsItem[] {
   // Para las categorías que no tienen datos predefinidos, generar dinámicamente
   const categories = ["health", "environment", "nacional", "provincial", "municipal", "local"]
 
+  // Mejorar la diversidad de fuentes de noticias
+  // Modificar la función getMockNewsItems para incluir más fuentes diversas
+
+  // Añadir estas fuentes adicionales en la sección donde se definen las fuentes
+  const additionalSources = [
+    "El Cronista",
+    "Perfil",
+    "Diario Popular",
+    "Crónica",
+    "El Economista",
+    "Tiempo Argentino",
+    "La Política Online",
+    "El Destape",
+    "Infobae",
+    "Minuto Uno",
+    "iProfesional",
+    "BAE Negocios",
+    "Ámbito Financiero",
+    "La Izquierda Diario",
+    "Revista Noticias",
+    "El Cohete a la Luna",
+    "Revista Anfibia",
+    "Chequeado",
+    "RedAcción",
+    "La Voz del Interior",
+    "Los Andes",
+    "La Capital",
+    "El Litoral",
+    "Río Negro",
+    "El Tribuno",
+  ]
+
   categories.forEach((cat) => {
     if (!mockNews[cat]) {
       mockNews[cat] = []
@@ -1140,11 +1172,33 @@ function getMockNewsItems(category: string): NewsItem[] {
             Math.floor(Math.random() * 4)
           ]
         } else if (cat === "nacional") {
-          source = ["Clarín", "La Nación", "Infobae", "Página/12", "Ámbito Financiero"][Math.floor(Math.random() * 5)]
-        } else if (cat === "provincial") {
-          source = ["El Día", "La Capital", "Diario Río Negro", "Los Andes", "El Litoral"][
-            Math.floor(Math.random() * 5)
+          // Modificar la selección de fuentes para usar también las adicionales
+          // Buscar la sección donde se seleccionan las fuentes y modificarla para incluir las nuevas
+          const allNationalSources = [
+            "Clarín",
+            "La Nación",
+            "Infobae",
+            "Página/12",
+            "Ámbito Financiero",
+            "El Cronista",
+            "Perfil",
+            "Tiempo Argentino",
+            "El Destape",
+            "La Política Online",
           ]
+          source = allNationalSources[Math.floor(Math.random() * allNationalSources.length)]
+        } else if (cat === "provincial") {
+          const allProvincialSources = [
+            "El Día",
+            "La Capital",
+            "Diario Río Negro",
+            "Los Andes",
+            "El Litoral",
+            "La Voz del Interior",
+            "El Tribuno",
+            "La Gaceta",
+          ]
+          source = allProvincialSources[Math.floor(Math.random() * allProvincialSources.length)]
         } else if (cat === "municipal") {
           source = ["La Voz Municipal", "El Eco", "Diario Local", "Crónica Municipal"][Math.floor(Math.random() * 4)]
         } else if (cat === "local") {

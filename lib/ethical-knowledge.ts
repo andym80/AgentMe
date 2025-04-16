@@ -350,3 +350,66 @@ export function getPartyPositionOnDilemma(party: PoliticalParty, dilemma: MoralD
       return dilemma.perspectives.communitarian
   }
 }
+
+// Función para obtener consideraciones éticas para un partido y categoría
+export function getEthicalConsiderations(party: PoliticalParty, category: string): string {
+  // Obtener principios éticos relevantes para la categoría
+  const principles = getRelevantEthicalPrinciples(category, 2)
+
+  // Obtener dilemas morales relevantes para la categoría
+  const dilemmas = getRelevantMoralDilemmas(category, 1)
+
+  // Obtener marcos éticos relevantes para la categoría
+  const frameworks = getRelevantEthicalFrameworks(category, 1)
+
+  // Obtener la posición ética del partido
+  const partyPosition = partyEthicalPositions[party]
+
+  // Construir el texto de consideraciones éticas
+  let considerations = `MARCO ÉTICO DE ${getPartyName(party).toUpperCase()}: ${partyPosition.framework}\n`
+  considerations += `PRINCIPIOS FUNDAMENTALES: ${partyPosition.principles.join(", ")}\n\n`
+
+  if (principles.length > 0) {
+    considerations += "PRINCIPIOS ÉTICOS RELEVANTES:\n"
+    principles.forEach((principle) => {
+      considerations += `- ${principle.name}: ${principle.description}\n`
+    })
+    considerations += "\n"
+  }
+
+  if (dilemmas.length > 0) {
+    considerations += "DILEMAS MORALES RELEVANTES:\n"
+    dilemmas.forEach((dilemma) => {
+      considerations += `- ${dilemma.issue}: ${dilemma.description}\n`
+      considerations += `  Posición del partido: ${getPartyPositionOnDilemma(party, dilemma)}\n`
+    })
+    considerations += "\n"
+  }
+
+  if (frameworks.length > 0) {
+    considerations += "MARCOS ÉTICOS APLICABLES:\n"
+    frameworks.forEach((framework) => {
+      considerations += `- ${framework.name}: ${framework.description}\n`
+    })
+  }
+
+  return considerations
+}
+
+// Función auxiliar para obtener el nombre del partido
+function getPartyName(party: PoliticalParty): string {
+  switch (party) {
+    case "libertad-avanza":
+      return "La Libertad Avanza"
+    case "union-patria":
+      return "Unión por la Patria"
+    case "juntos-cambio":
+      return "Juntos por el Cambio"
+    case "frente-izquierda":
+      return "Frente de Izquierda"
+    case "otros":
+      return "Otros partidos"
+    default:
+      return "Partido político"
+  }
+}
