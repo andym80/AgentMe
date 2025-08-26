@@ -1,10 +1,10 @@
-import SpeechGenerator from "@/components/speech-generator"
+import PressManager from "@/components/press-manager"
 
 export default function Home() {
   return (
-    <main className="container mx-auto py-8 px-4">
-      <h1 className="text-3xl font-bold mb-8 text-center">Gestor de Prensa Político</h1>
-      <SpeechGenerator />
+    <main className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8 text-center">Political Press Manager AI</h1>
+      <PressManager />
     </main>
   )
 }
