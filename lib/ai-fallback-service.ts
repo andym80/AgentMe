@@ -2,7 +2,6 @@
 
 import { generateAnthropicResponse } from "./ai-service"
 import { generateOpenAIResponse } from "./openai-service"
-import { encrypt, decrypt } from "./crypto-utils"
 import { safeStorage, isClient } from "./storage-utils"
 
 export type AIProvider = "anthropic" | "openai" | "auto"
@@ -28,35 +27,20 @@ export function setPreferredProvider(provider: AIProvider): void {
   safeStorage.setItem("preferred_ai_provider", provider)
 }
 
-// Función para encriptar y guardar un elemento en localStorage
+// Función para guardar un elemento en localStorage (sin encriptación en el cliente)
 export function setEncryptedItem(key: string, value: string): void {
   if (!isClient) return
 
-  const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "default-encryption-key"
-  const encryptedValue = encrypt(value, encryptionKey)
-  safeStorage.setItem(key, encryptedValue)
+  // Guardar directamente sin encriptación del lado del cliente
+  // La encriptación se manejará del lado del servidor cuando sea necesario
+  safeStorage.setItem(key, value)
 }
 
-// Función para obtener y desencriptar un elemento de localStorage
+// Función para obtener un elemento de localStorage
 export function getEncryptedItem(key: string): string | null {
   if (!isClient) return null
 
-  const encryptedValue = safeStorage.getItem(key)
-  if (!encryptedValue) return null
-
-  // Si el valor no está encriptado (no contiene ":"), devolverlo directamente
-  if (!encryptedValue.includes(":")) {
-    return encryptedValue
-  }
-
-  const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "default-encryption-key"
-  try {
-    return decrypt(encryptedValue, encryptionKey)
-  } catch (error) {
-    console.error(`Error al desencriptar ${key}:`, error)
-    // Si hay un error de desencriptación, intentar devolver el valor sin desencriptar
-    return encryptedValue
-  }
+  return safeStorage.getItem(key)
 }
 
 // Generar respuesta con fallback automático

@@ -4,195 +4,273 @@ import type React from "react"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { User, Lock, Flag, ArrowRight } from "lucide-react"
-
-type PoliticalParty = "libertad-avanza" | "union-patria" | "juntos-cambio" | "frente-izquierda" | "otros"
+import { AlertCircle, CheckCircle, Users, Flag } from "lucide-react"
+import { safeStorage, isClient } from "@/lib/storage-utils"
 
 interface LoginFormProps {
-  onLogin?: (party: PoliticalParty) => void
+  onLogin?: (userData: { name: string; party: string; email: string }) => void
 }
 
-function LoginFormComponent({ onLogin }: LoginFormProps = {}) {
-  const [selectedParty, setSelectedParty] = useState<PoliticalParty | "">("")
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+const POLITICAL_PARTIES = [
+  {
+    id: "frente-de-todos",
+    name: "Frente de Todos",
+    description: "Coalición peronista progresista",
+    color: "bg-blue-500",
+    leader: "Alberto Fernández / Cristina Kirchner",
+  },
+  {
+    id: "juntos-por-el-cambio",
+    name: "Juntos por el Cambio",
+    description: "Coalición centro-derecha",
+    color: "bg-yellow-500",
+    leader: "Mauricio Macri / Patricia Bullrich",
+  },
+  {
+    id: "la-libertad-avanza",
+    name: "La Libertad Avanza",
+    description: "Movimiento libertario",
+    color: "bg-purple-500",
+    leader: "Javier Milei",
+  },
+  {
+    id: "frente-de-izquierda",
+    name: "Frente de Izquierda",
+    description: "Coalición de izquierda",
+    color: "bg-red-500",
+    leader: "Nicolás del Caño / Myriam Bregman",
+  },
+  {
+    id: "hacemos-por-nuestro-pais",
+    name: "Hacemos por Nuestro País",
+    description: "Centro político",
+    color: "bg-green-500",
+    leader: "Juan Schiaretti",
+  },
+]
 
-  const parties = [
-    {
-      id: "libertad-avanza" as const,
-      name: "La Libertad Avanza",
-      color: "bg-purple-600",
-      description: "Libertad económica y reducción del Estado",
-    },
-    {
-      id: "union-patria" as const,
-      name: "Unión por la Patria",
-      color: "bg-blue-600",
-      description: "Justicia social y soberanía nacional",
-    },
-    {
-      id: "juntos-cambio" as const,
-      name: "Juntos por el Cambio",
-      color: "bg-yellow-600",
-      description: "Instituciones sólidas y desarrollo sustentable",
-    },
-    {
-      id: "frente-izquierda" as const,
-      name: "Frente de Izquierda",
-      color: "bg-red-600",
-      description: "Derechos de los trabajadores y transformación social",
-    },
-    {
-      id: "otros" as const,
-      name: "Otros Partidos",
-      color: "bg-gray-600",
-      description: "Otras fuerzas políticas",
-    },
-  ]
+function LoginFormComponent({ onLogin }: LoginFormProps) {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    party: "",
+  })
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    setError(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedParty) return
+
+    if (!formData.name.trim() || !formData.email.trim() || !formData.party) {
+      setError("Por favor, completa todos los campos")
+      return
+    }
+
+    if (!formData.email.includes("@")) {
+      setError("Por favor, ingresa un email válido")
+      return
+    }
 
     setIsLoading(true)
+    setError(null)
 
-    // Simulate login process
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    try {
+      // Simular autenticación
+      await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    onLogin?.(selectedParty as PoliticalParty)
-    setIsLoading(false)
+      const selectedParty = POLITICAL_PARTIES.find((p) => p.id === formData.party)
+      const userData = {
+        name: formData.name,
+        email: formData.email,
+        party: selectedParty?.name || formData.party,
+        loginTime: new Date().toISOString(),
+      }
+
+      // Guardar en localStorage
+      if (isClient) {
+        safeStorage.setItem("user_data", JSON.stringify(userData))
+        safeStorage.setItem("selected_party", formData.party)
+      }
+
+      setSuccess(true)
+
+      // Llamar callback si existe
+      if (onLogin) {
+        onLogin(userData)
+      }
+
+      // Recargar la página después de un breve delay
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    } catch (error) {
+      setError("Error al iniciar sesión. Por favor, intenta de nuevo.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleDemoAccess = (party: PoliticalParty) => {
-    setSelectedParty(party)
-    setUsername("demo")
-    setPassword("demo")
-    onLogin?.(party)
+  const handleDemoLogin = () => {
+    const demoData = {
+      name: "Usuario Demo",
+      email: "demo@pressmanager.ai",
+      party: "frente-de-todos",
+    }
+
+    setFormData(demoData)
+
+    // Auto-submit después de un breve delay
+    setTimeout(() => {
+      const form = document.querySelector("form")
+      if (form) {
+        form.requestSubmit()
+      }
+    }, 500)
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 h-12 w-12 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-            <Flag className="h-6 w-6 text-white" />
-          </div>
-          <CardTitle className="text-2xl font-bold">Press Manager AI</CardTitle>
-          <CardDescription>Accede al sistema de gestión política inteligente</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="party">Partido Político</Label>
-              <Select value={selectedParty} onValueChange={setSelectedParty}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona tu partido político" />
-                </SelectTrigger>
-                <SelectContent>
-                  {parties.map((party) => (
-                    <SelectItem key={party.id} value={party.id}>
-                      <div className="flex items-center space-x-2">
-                        <div className={`h-3 w-3 rounded-full ${party.color}`} />
-                        <span>{party.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedParty && (
-                <p className="text-sm text-muted-foreground">
-                  {parties.find((p) => p.id === selectedParty)?.description}
-                </p>
-              )}
-            </div>
+  const selectedParty = POLITICAL_PARTIES.find((p) => p.id === formData.party)
 
-            <div className="space-y-2">
-              <Label htmlFor="username">Usuario</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="Ingresa tu usuario"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Ingresa tu contraseña"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={!selectedParty || isLoading}>
-              {isLoading ? (
-                <div className="flex items-center space-x-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  <span>Iniciando sesión...</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <span>Iniciar Sesión</span>
-                  <ArrowRight className="h-4 w-4" />
-                </div>
-              )}
-            </Button>
-          </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator className="w-full" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">O accede con demo</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2">
-            {parties.slice(0, 4).map((party) => (
-              <Button
-                key={party.id}
-                variant="outline"
-                size="sm"
-                onClick={() => handleDemoAccess(party.id)}
-                className="justify-start"
-              >
-                <div className={`h-3 w-3 rounded-full ${party.color} mr-2`} />
-                <span className="text-xs">{party.name}</span>
-                <Badge variant="secondary" className="ml-auto text-xs">
-                  Demo
-                </Badge>
-              </Button>
-            ))}
-          </div>
-
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground">Sistema de análisis político para campañas argentinas</p>
+  if (success) {
+    return (
+      <Card className="w-full max-w-md mx-auto">
+        <CardContent className="pt-6">
+          <div className="text-center space-y-4">
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
+            <h3 className="text-lg font-semibold">¡Bienvenido!</h3>
+            <p className="text-sm text-muted-foreground">Iniciando sesión como {formData.name}...</p>
           </div>
         </CardContent>
       </Card>
-    </div>
+    )
+  }
+
+  return (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader className="space-y-1">
+        <div className="flex items-center space-x-2">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+            <span className="text-white font-bold text-sm">PM</span>
+          </div>
+          <div>
+            <CardTitle className="text-2xl">Press Manager AI</CardTitle>
+            <CardDescription>Accede a tu plataforma de gestión política</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Nombre completo</Label>
+            <Input
+              id="name"
+              type="text"
+              placeholder="Tu nombre completo"
+              value={formData.name}
+              onChange={(e) => handleInputChange("name", e.target.value)}
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="tu@email.com"
+              value={formData.email}
+              onChange={(e) => handleInputChange("email", e.target.value)}
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="party">Afiliación Política</Label>
+            <Select
+              value={formData.party}
+              onValueChange={(value) => handleInputChange("party", value)}
+              disabled={isLoading}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona tu partido político" />
+              </SelectTrigger>
+              <SelectContent>
+                {POLITICAL_PARTIES.map((party) => (
+                  <SelectItem key={party.id} value={party.id}>
+                    <div className="flex items-center space-x-2">
+                      <div className={`h-3 w-3 rounded-full ${party.color}`} />
+                      <span>{party.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedParty && (
+            <div className="p-3 bg-muted rounded-lg">
+              <div className="flex items-start space-x-2">
+                <Flag className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{selectedParty.name}</p>
+                  <p className="text-xs text-muted-foreground">{selectedParty.description}</p>
+                  <div className="flex items-center space-x-1">
+                    <Users className="h-3 w-3" />
+                    <span className="text-xs text-muted-foreground">{selectedParty.leader}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-center space-x-2 text-sm text-red-600">
+              <AlertCircle className="h-4 w-4" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
+          </Button>
+        </form>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">O</span>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full bg-transparent"
+          onClick={handleDemoLogin}
+          disabled={isLoading}
+        >
+          <Users className="mr-2 h-4 w-4" />
+          Acceso Demo
+        </Button>
+
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">
+            Al iniciar sesión, aceptas nuestros términos de servicio y política de privacidad
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

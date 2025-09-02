@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { encrypt } from "@/lib/crypto-utils"
 import { CheckCircle, AlertTriangle } from "lucide-react"
 import { safeStorage, isClient } from "@/lib/storage-utils"
 
@@ -39,17 +38,14 @@ export default function OpenAIKeyConfig() {
     try {
       // Solo guardar en localStorage si estamos en el cliente
       if (isClient && isMounted) {
-        // Encriptar la clave API antes de guardarla
-        const encryptionKey = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "default-encryption-key"
-        const encryptedKey = encrypt(apiKey, encryptionKey)
-
-        // Guardar la clave API encriptada en localStorage de forma segura
-        safeStorage.setItem("openai_api_key", encryptedKey)
+        // Guardar la clave API directamente en localStorage
+        // La encriptación se manejará del lado del servidor cuando sea necesario
+        safeStorage.setItem("openai_api_key", apiKey)
 
         // Limpiar cualquier bandera de cuota excedida
         safeStorage.removeItem("openai_quota_exceeded")
 
-        setSavedKey(encryptedKey)
+        setSavedKey(apiKey)
         setSaveSuccess(true)
 
         // Ocultar el mensaje de éxito después de 3 segundos
