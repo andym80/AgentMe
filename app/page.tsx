@@ -22,7 +22,6 @@ import {
 import { fetchNews } from "@/lib/news-service"
 import type { NewsItem, PoliticalParty } from "@/lib/types"
 import { Navbar } from "@/components/navbar"
-import { LoginForm } from "@/components/login-form"
 import { ModeToggle } from "@/components/mode-toggle"
 import StreamlinedPressManager from "@/components/streamlined-press-manager"
 import DashboardView from "@/components/dashboard-view"
@@ -101,7 +100,6 @@ function PerformanceStats() {
 
 export default function HomePage() {
   // Estados principales
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [selectedParty, setSelectedParty] = useState<PoliticalParty>("libertad-avanza")
   const [activeTab, setActiveTab] = useState("dashboard")
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
@@ -144,10 +142,8 @@ export default function HomePage() {
 
   // Cargar noticias al montar el componente
   useEffect(() => {
-    if (isLoggedIn) {
-      loadInitialNews()
-    }
-  }, [isLoggedIn, loadInitialNews])
+    loadInitialNews()
+  }, [loadInitialNews])
 
   // Manejar actualización de noticias
   const handleRefreshNews = useCallback(async () => {
@@ -194,21 +190,6 @@ export default function HomePage() {
   const memoizedTechnicalAnalysis = useMemo(() => <TechnicalAnalysisView news={newsItems} />, [newsItems])
 
   const memoizedAdvancedFeatures = useMemo(() => <AdvancedFeaturesPanel />, [])
-
-  // Si no está logueado, mostrar formulario de login
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Press Manager AI</h1>
-            <p className="text-gray-600">Gestor de Prensa Inteligente para Campañas Políticas</p>
-          </div>
-          <LoginForm onLogin={() => setIsLoggedIn(true)} />
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-background">

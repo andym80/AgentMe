@@ -152,11 +152,7 @@ export function Navbar({ user, onLogout }: NavbarProps) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : (
-              <Button asChild>
-                <Link href="/login">Iniciar Sesión</Link>
-              </Button>
-            )}
+            ) : null}
 
             {/* Mobile menu button */}
             <Button
