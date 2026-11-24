@@ -152,7 +152,14 @@ export function Navbar({ user, onLogout }: NavbarProps) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : null}
+            ) : (
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/settings-client" className="flex items-center">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Configuración</span>
+                </Link>
+              </Button>
+            )}
 
             {/* Mobile menu button */}
             <Button

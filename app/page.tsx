@@ -21,7 +21,6 @@ import {
 } from "lucide-react"
 import { fetchNews } from "@/lib/news-service"
 import type { NewsItem, PoliticalParty } from "@/lib/types"
-import { Navbar } from "@/components/navbar"
 import { ModeToggle } from "@/components/mode-toggle"
 import StreamlinedPressManager from "@/components/streamlined-press-manager"
 import DashboardView from "@/components/dashboard-view"
@@ -193,7 +192,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
 
       <main className="container mx-auto py-6 px-4">
         {/* Header con estadísticas de rendimiento */}
